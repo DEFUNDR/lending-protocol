@@ -61,4 +61,31 @@ pub fn process_deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         amount,
         decimals,
     )?;
+
+    let bank = &mut ctx.accounts.bank;
+
+    if bank.total_deposits == 0 {
+        bank.total_deposits = amount;
+        bank.total_shares = amount;
+    } 
+    let deposit_ratio = amount.checked_div(bank.total_deposits).unwrap_or();
+    let user_shares = bank.total_shares.checked_mul(deposit_ratio).unwrap_or();
+
+    let user = &mut ctx.accounts.user_account;
+    match ctxx.accounts.mint.to_account_info().key {
+        key : Pubkey if key == user.usdc_address => {
+            user.deposited_usdc += amount;
+            user.deposited_usdc_shares += user_shares;
+        },
+        _ => {
+            user.deposited_sol += amount;
+            user.deposited_sol_shares += user_shares;
+        }
+    }
+
+    bank.total_deposits += amount;
+    bank.user_shares += user_shares;
+    
+
+    Ok(());
 }
