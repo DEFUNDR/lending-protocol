@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenInterface, InterfaceAccount, TokenAccount, TransferChecked};
 use create::state::{Bank, User};
+use anchor_spl::associated_token::AssociatedToken;
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
@@ -41,4 +42,21 @@ pub struct Withdraw<'info> {
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
     pub associated_token_program: Program<'info, AssociatedToken>,
+}
+
+pub fn process_withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
+    let user = &mut ctx.accounts.user_account;
+
+    let deposited_value : u64;
+    if ctx.accounts.mint.to_account_info().key != user.usdc_address {
+        deposited_value = user.deposited_usdc;
+    } else {
+        deposited_value = user.deposited_sol;
+    }
+
+    if amount > deposited_value {
+        return Err(ErrorCode::InsufficientFunds.into()); //TODO: Custom error for insufficient funds
+    }
+
+    Ok(());
 }
