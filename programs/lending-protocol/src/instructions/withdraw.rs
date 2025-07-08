@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenInterface, InterfaceAccount, TokenAccount, TransferChecked};
 use create::state::{Bank, User};
 use anchor_spl::associated_token::AssociatedToken;
+use create::error::ErrorCode;
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
@@ -55,8 +56,38 @@ pub fn process_withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     }
 
     if amount > deposited_value {
-        return Err(ErrorCode::InsufficientFunds.into()); //TODO: Custom error for insufficient funds
+        return Err(ErrorCode::InsufficientFunds.into());
     }
 
+    let transfer_cpi_accounts = TransferChecked {
+        from: ctx.accounts.bank_token_account.to_account_info(),
+        to: ctx.accounts.user_token_account.to_account_info(),
+        authority: ctx.accounts.bank_token_account.to_account_info(),
+        mint: ctx.accounts.mint.to_account_info(),
+    };
+    let cpi_program = ctx.accounts.token_program.to_account_info();
+
+    let mint_key = ctx.accounts.mint.key();
+    let signer_seeds = &[&[&[u8]]] = &[
+        &[
+            b"treasury",
+            mint.key().as_ref(),
+            &[ctx.bumps.bank_token_account],
+
+        ]
+    ]
+
+    let cpi_ctx = CpiContext::new(
+        cpi_program,
+        transfer_cpi_accounts,
+    ).with_signer(&[&signer_seeds]);
+
+    let decimals = ctx.accounts.mint.decimals;
+    token_interface::transfer_checked(
+        cpi_ctx,
+        amount,
+        decimals,
+    )?;
+    
     Ok(());
 }
